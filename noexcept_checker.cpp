@@ -5,7 +5,6 @@
 #include <clang/AST/TypeBase.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
-#include <xte/preproc/lift.hpp>
 #include <cstddef>
 #include <functional>
 #include <memory>

@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(noexcept_checker)
 
-include(FetchContent)
-
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
@@ -28,17 +26,18 @@ target_compile_options(noexcept_checker PRIVATE
 	-Wpedantic
 	-Wconversion
 	-Wsign-conversion
-	-fconcepts-diagnostics-depth=999
 )
 
-target_link_options(noexcept_checker PRIVATE
-	"-Wl,--allow-shlib-undefined"
-)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	target_link_options(noexcept_checker PRIVATE
+		"-Wl,-undefined,dynamic_lookup"
+	)
+else()
+	target_link_options(noexcept_checker PRIVATE
+		"-Wl,--allow-shlib-undefined"
+	)
+endif()
 
 set_target_properties(noexcept_checker PROPERTIES
 	PREFIX ""
 )
-
-FetchContent_Declare(xieite GIT_REPOSITORY https://github.com/Eczbek/xieite GIT_TAG main)
-FetchContent_MakeAvailable(xieite)
-target_link_libraries(noexcept_checker PRIVATE xieite)
