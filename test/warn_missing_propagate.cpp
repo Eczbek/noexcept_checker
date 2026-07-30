@@ -2,6 +2,6 @@
 
 void f() THROWS(int) {}
 
-void g() {
+void g() noexcept {
 	f();
 }
