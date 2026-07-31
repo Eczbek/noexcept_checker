@@ -80,7 +80,11 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 				case clang::EST_None:
 				case clang::EST_MSAny:
 					if (thrownTypes[funcDecl].size()) {
-						llvm::errs() << std::format("{}: exception specifier should explicitly list uncaught type(s): {:s}\n", funcDecl->getBeginLoc().printToString(*sourceManager), thrownTypes[funcDecl] | std::views::transform([](clang::Type const* type) { return std::format("'{}'", clang::QualType(type, 0).getAsString()); }) | std::views::join_with(", "sv));
+						llvm::errs() << std::format("{}: exception specifier should explicitly list uncaught type(s): '{}'", funcDecl->getBeginLoc().printToString(*sourceManager), clang::QualType(*thrownTypes[funcDecl].begin(), 0).getAsString());
+						for (clang::Type const* type : thrownTypes[funcDecl] | std::views::drop(1)) {
+							llvm::errs() << std::format(", '{}'", clang::QualType(type, 0).getAsString());
+						}
+						llvm::errs() << "\n";
 					} else {
 						llvm::errs() << std::format("{}: exception specifier should be noexcept\n", sourceManager->getExpansionLoc(funcDecl->getBeginLoc()).printToString(*sourceManager));
 					}
@@ -136,7 +140,11 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 		if (caughtQualType.isNull()) {
 			auto thrownCount = thrownTypes[scopeStack.back()].size();
 			if (thrownCount) {
-				llvm::errs() << std::format("{}: ellipsis catches {} type(s): {:s}\n", catchStmt->getBeginLoc().printToString(*sourceManager), thrownCount, thrownTypes[scopeStack.back()] | std::views::transform([](clang::Type const* type) { return std::format("'{}'", clang::QualType(type, 0).getAsString()); }) | std::views::join_with(", "sv));
+				llvm::errs() << std::format("{}: ellipsis catches {} type(s): '{}'", catchStmt->getBeginLoc().printToString(*sourceManager), thrownCount, clang::QualType(*thrownTypes[scopeStack.back()].begin(), 0).getAsString());
+				for (clang::Type const* type : thrownTypes[scopeStack.back()] | std::views::drop(1)) {
+					llvm::errs() << std::format(", '{}'", clang::QualType(type, 0).getAsString());
+				}
+				llvm::errs() << "\n";
 			} else {
 				llvm::errs() << std::format("{}: ellipsis catches no types\n", catchStmt->getBeginLoc().printToString(*sourceManager));
 			}
