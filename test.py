@@ -7,7 +7,7 @@ for file, expected_lines in [
 	["test/ok_ctor.cpp", []],
 	["test/ok_derived.cpp", []],
 	["test/warn_const_ref.cpp", [
-		"test/warn_const_ref.cpp:4:11: caught type should be const reference: 'int'"]],
+		"test/warn_const_ref.cpp:4:4: caught type should be const reference: 'int'"]],
 	["test/warn_ctor.cpp", [
 		"test/warn_ctor.cpp:2:2: exception specifier should explicitly list uncaught type(s): 'int'"]],
 	["test/warn_duplicate.cpp", [
@@ -33,7 +33,7 @@ for file, expected_lines in [
 	["test/warn_none.cpp", [
 		"test/warn_none.cpp:1:1: exception specifier should be noexcept"]],
 	["test/warn_not_thrown.cpp", [
-		"test/warn_not_thrown.cpp:4:11: caught type was not thrown: 'char'"]],
+		"test/warn_not_thrown.cpp:4:4: caught type was not thrown: 'char'"]],
 	["test/warn_rethrow.cpp", [
 		"test/warn_rethrow.cpp:4:2: rethrow outside catch statement may terminate",
 		"test/warn_rethrow.cpp:3:1: exception specifier should be noexcept",
@@ -43,11 +43,11 @@ for file, expected_lines in [
 	["test/warn_temp_obj.cpp", [
 		"test/warn_temp_obj.cpp:12:4: ellipsis catches 1 type(s): 'int'"]],
 	["test/warn_throw_unscoped.cpp", [
-		"test/warn_throw_unscoped.cpp:1:10: throw in namespace scope cannot be caught"]]
+		"test/warn_throw_unscoped.cpp:1:10: throw in namespace scope"]]
 ]:
 	lines = set(filter(lambda s: len(s) > 0, os.popen("clang++ -c -fplugin=build/noexcept_checker.so -Xclang -plugin -Xclang noexcept_checker -std=c++23 -w -o/dev/null " + file + " 2>&1").read().split("\n")))
 	if lines != set(expected_lines):
-		print(file + ":\n" + "\n".join(lines) + "\n")
+		print("\n".join(lines) + "\n")
 		passed = False
 
 if passed:

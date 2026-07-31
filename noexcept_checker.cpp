@@ -37,15 +37,22 @@ std::optional<std::unordered_set<clang::Type const*>> activeExceptions;
 std::vector<clang::LambdaExpr const*> lambdaExprStack;
 std::unordered_map<void const*, std::unordered_set<clang::Type const*>> thrownTypes;
 
+void warn(auto* location_of, std::string_view message) {
+	clang::SourceLocation location = sourceManager->getExpansionLoc(location_of->getBeginLoc());
+	if (!location.isValid() || !sourceManager->isInSystemHeader(location)) {
+		llvm::errs() << std::format("{}: {}\n", location.printToString(*sourceManager), message);
+	}
+}
+
 struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 	bool TraverseFunctionDecl(clang::FunctionDecl* funcDecl) {
 		if (!thrownTypes.contains(funcDecl)) {
 			scopeStack.push_back(funcDecl);
 			RecursiveASTVisitor::TraverseFunctionDecl(funcDecl);
-			if (scopeStack.size() > 1) {
-				thrownTypes[scopeStack[scopeStack.size() - 2]].insert_range(thrownTypes[funcDecl]);
-			}
 			scopeStack.pop_back();
+			if (scopeStack.size() > 1) {
+				thrownTypes[scopeStack.back()].insert_range(thrownTypes[funcDecl]);
+			}
 
 			std::vector<clang::Type const*> specifiedTypes;
 			switch (funcDecl->getExceptionSpecType()) {
@@ -80,13 +87,13 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 				case clang::EST_None:
 				case clang::EST_MSAny:
 					if (thrownTypes[funcDecl].size()) {
-						llvm::errs() << std::format("{}: exception specifier should explicitly list uncaught type(s): '{}'", funcDecl->getBeginLoc().printToString(*sourceManager), clang::QualType(*thrownTypes[funcDecl].begin(), 0).getAsString());
+						std::string s = std::format("exception specifier should explicitly list uncaught type(s): '{}'", clang::QualType(*thrownTypes[funcDecl].begin(), 0).getAsString());
 						for (clang::Type const* type : thrownTypes[funcDecl] | std::views::drop(1)) {
-							llvm::errs() << std::format(", '{}'", clang::QualType(type, 0).getAsString());
+							s += std::format(", '{}'", clang::QualType(type, 0).getAsString());
 						}
-						llvm::errs() << "\n";
+						warn(funcDecl, s);
 					} else {
-						llvm::errs() << std::format("{}: exception specifier should be noexcept\n", sourceManager->getExpansionLoc(funcDecl->getBeginLoc()).printToString(*sourceManager));
+						warn(funcDecl, "exception specifier should be noexcept");
 					}
 					return true;
 				default:;
@@ -95,18 +102,18 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 			for (clang::Type const* specifiedType : specifiedTypes) {
 				auto [iter, success] = propagatedTypes.emplace(specifiedType);
 				if (!success) {
-					llvm::errs() << std::format("{}: exception specifier lists duplicate type: '{}'\n", sourceManager->getExpansionLoc(funcDecl->getBeginLoc()).printToString(*sourceManager), clang::QualType(*iter, 0).getAsString());
+					warn(funcDecl, std::format("exception specifier lists duplicate type: '{}'\n", clang::QualType(*iter, 0).getAsString()));
 				}
 			}
 			for (clang::Type const* thrownType : thrownTypes[funcDecl]) {
 				if (propagatedTypes.contains(thrownType)) {
 					propagatedTypes.erase(thrownType);
 				} else {
-					llvm::errs() << std::format("{}: exception specifier omits uncaught type: '{}'\n", sourceManager->getExpansionLoc(funcDecl->getBeginLoc()).printToString(*sourceManager), clang::QualType(thrownType, 0).getAsString());
+					warn(funcDecl, std::format("exception specifier omits uncaught type: '{}'\n", clang::QualType(thrownType, 0).getAsString()));
 				}
 			}
 			for (clang::Type const* propagatedType : propagatedTypes) {
-				llvm::errs() << std::format("{}: exception specifier lists caught or unthrown type: '{}'\n", sourceManager->getExpansionLoc(funcDecl->getBeginLoc()).printToString(*sourceManager), clang::QualType(propagatedType, 0).getAsString());
+				warn(funcDecl, std::format("exception specifier lists caught or unthrown type: '{}'\n", clang::QualType(propagatedType, 0).getAsString()));
 			}
 		}
 		return true;
@@ -140,13 +147,13 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 		if (caughtQualType.isNull()) {
 			auto thrownCount = thrownTypes[scopeStack.back()].size();
 			if (thrownCount) {
-				llvm::errs() << std::format("{}: ellipsis catches {} type(s): '{}'", catchStmt->getBeginLoc().printToString(*sourceManager), thrownCount, clang::QualType(*thrownTypes[scopeStack.back()].begin(), 0).getAsString());
+				std::string s = std::format("ellipsis catches {} type(s): '{}'", thrownCount, clang::QualType(*thrownTypes[scopeStack.back()].begin(), 0).getAsString());
 				for (clang::Type const* type : thrownTypes[scopeStack.back()] | std::views::drop(1)) {
-					llvm::errs() << std::format(", '{}'", clang::QualType(type, 0).getAsString());
+					s += std::format(", '{}'", clang::QualType(type, 0).getAsString());
 				}
-				llvm::errs() << "\n";
+				warn(catchStmt, s);
 			} else {
-				llvm::errs() << std::format("{}: ellipsis catches no types\n", catchStmt->getBeginLoc().printToString(*sourceManager));
+				warn(catchStmt, "ellipsis catches no types");
 			}
 			activeExceptions.emplace(std::move(thrownTypes[scopeStack.back()]));
 			thrownTypes[scopeStack.back()].clear();
@@ -157,7 +164,7 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 				if (thrownType == caughtType) {
 					activeExceptions->emplace(thrownType);
 					if (!caughtQualType->isReferenceType()) {
-						llvm::errs() << std::format("{}: caught type should be const reference: '{}'\n", catchStmt->getExceptionDecl()->getBeginLoc().printToString(*sourceManager), caughtQualType.getAsString());
+						warn(catchStmt, std::format("caught type should be const reference: '{}'", caughtQualType.getAsString()));
 					}
 					return true;
 				}
@@ -174,7 +181,7 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 				}
 				return false;
 			})) {
-				llvm::errs() << std::format("{}: caught type was not thrown: '{}'\n", catchStmt->getExceptionDecl()->getBeginLoc().printToString(*sourceManager), clang::QualType(caughtType, 0).getAsString());
+				warn(catchStmt, std::format("caught type was not thrown: '{}'", clang::QualType(caughtType, 0).getAsString()));
 			}
 		}
 		RecursiveASTVisitor::TraverseCXXCatchStmt(catchStmt);
@@ -188,13 +195,13 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 			if (scopeStack.size()) {
 				thrownTypes[scopeStack.back()].emplace(thrownExpr->getType().getTypePtr());
 			} else {
-				llvm::errs() << std::format("{}: throw in namespace scope cannot be caught\n", throwExpr->getBeginLoc().printToString(*sourceManager));
+				warn(throwExpr, "throw in namespace scope");
 			}
 		} else if (activeExceptions) {
 			thrownTypes[scopeStack.back()] = std::move(*activeExceptions);
 			activeExceptions.reset();
 		} else {
-			llvm::errs() << std::format("{}: rethrow outside catch statement may terminate\n", throwExpr->getBeginLoc().printToString(*sourceManager));
+			warn(throwExpr, "rethrow outside catch statement may terminate");
 		}
 		return true;
 	}
@@ -202,7 +209,11 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 	bool TraverseCallExpr(clang::CallExpr* callExpr) {
 		if (clang::FunctionDecl* calledFuncDecl = callExpr->getDirectCallee()) {
 			TraverseFunctionDecl(calledFuncDecl);
-			thrownTypes[scopeStack.back()].insert_range(thrownTypes[calledFuncDecl]);
+			if (scopeStack.size()) {
+				thrownTypes[scopeStack.back()].insert_range(thrownTypes[calledFuncDecl]);
+			} else {
+				warn(callExpr, "non-noexcept function call in namespace scope");
+			}
 		}
 		RecursiveASTVisitor::TraverseCallExpr(callExpr);
 		return true;
@@ -215,7 +226,11 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 
 	bool TraverseCXXConstructExpr(clang::CXXConstructExpr* constructExpr) {
 		TraverseFunctionDecl(constructExpr->getConstructor());
-		thrownTypes[scopeStack.back()].insert_range(thrownTypes[constructExpr->getConstructor()]);
+		if (scopeStack.size()) {
+			thrownTypes[scopeStack.back()].insert_range(thrownTypes[constructExpr->getConstructor()]);
+		} else {
+			warn(constructExpr, "non-noexcept constructor call in namespace scope");
+		}
 		RecursiveASTVisitor::TraverseCXXConstructExpr(constructExpr);
 		return true;
 	}
