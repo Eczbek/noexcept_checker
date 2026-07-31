@@ -211,7 +211,7 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 			thrownTypes[scopeStack.back()] = std::move(*activeExceptions);
 			activeExceptions.reset();
 		} else {
-			llvm::errs() << std::format("{}: rethrow without active exception will terminate\n", throwExpr->getBeginLoc().printToString(*sourceManager));
+			llvm::errs() << std::format("{}: rethrow outside catch statement may terminate\n", throwExpr->getBeginLoc().printToString(*sourceManager));
 		}
 		return true;
 	}

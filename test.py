@@ -32,9 +32,11 @@ for file, expected_lines in [
 	["test/warn_not_thrown.cpp", [
 		"test/warn_not_thrown.cpp:4:11: caught type was not thrown: 'char'"]],
 	["test/warn_rethrow.cpp", [
-		"test/warn_rethrow.cpp:2:2: rethrow without active exception will terminate"]],
+		"test/warn_rethrow.cpp:4:2: rethrow outside catch statement may terminate",
+		"test/warn_rethrow.cpp:3:1: exception specifier should be noexcept",
+		"test/warn_rethrow.cpp:7:1: exception specifier lists caught or unthrown type: 'int'"]],
 	["test/warn_rethrow_unscoped.cpp", [
-		"test/warn_rethrow_unscoped.cpp:1:10: rethrow without active exception will terminate"]],
+		"test/warn_rethrow_unscoped.cpp:1:10: rethrow outside catch statement may terminate"]],
 	["test/warn_temp_obj.cpp", [
 		"test/warn_temp_obj.cpp:12:4: ellipsis catches 1 type(s): 'int'"]],
 	["test/warn_throw_unscoped.cpp", [
