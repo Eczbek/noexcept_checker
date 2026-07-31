@@ -2,6 +2,9 @@ import os;
 
 passed = True
 for file, expected_lines in [
+	["test/ok_call.cpp", []],
+	["test/ok_call2.cpp", []],
+	["test/ok_ctor.cpp", []],
 	["test/ok_derived.cpp", []],
 	["test/warn_const_ref.cpp", [
 		"test/warn_const_ref.cpp:4:11: caught type should be const reference: 'int'"]],

@@ -2,9 +2,12 @@
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/CXXInheritance.h>
 #include <clang/AST/Decl.h>
+#include <clang/AST/Expr.h>
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/AST/StmtCXX.h>
+#include <clang/AST/TypeBase.h>
+#include <clang/Basic/ExceptionSpecificationType.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
 #include <clang/Sema/Sema.h>
@@ -12,7 +15,6 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
-// TODO: Check for missing includes
 
 #include <algorithm>
 #include <format>
@@ -129,33 +131,6 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 		return true;
 	}
 
-	bool TraverseCXXConstructExpr(clang::CXXConstructExpr* constructExpr) {
-		TraverseFunctionDecl(constructExpr->getConstructor());
-		thrownTypes[scopeStack.back()].insert_range(thrownTypes[constructExpr->getConstructor()]);
-		// RecursiveASTVisitor::TraverseCXXConstructExpr(constructExpr);
-		return true;
-	}
-
-	bool TraverseCXXTemporaryObjectExpr(clang::CXXTemporaryObjectExpr* tempObjExpr) {
-		TraverseCXXConstructExpr(tempObjExpr);
-		return true;
-	}
-
-	bool TraverseCallExpr(clang::CallExpr* callExpr) {
-		if (clang::FunctionDecl* calledFuncDecl = callExpr->getDirectCallee()) {
-			TraverseFunctionDecl(calledFuncDecl);
-			thrownTypes[scopeStack.back()].insert_range(thrownTypes[calledFuncDecl]);
-		}
-		// RecursiveASTVisitor::TraverseCallExpr(callExpr);
-		return true;
-	}
-
-	bool TraverseCXXOperatorCallExpr(clang::CXXOperatorCallExpr* operatorCallExpr) {
-		TraverseCallExpr(operatorCallExpr);
-		// RecursiveASTVisitor::TraverseCXXOperatorCallExpr(operatorCallExpr);
-		return true;
-	}
-
 	bool TraverseCXXCatchStmt(clang::CXXCatchStmt* catchStmt) {
 		clang::QualType caughtQualType = catchStmt->getCaughtType();
 		if (caughtQualType.isNull()) {
@@ -213,6 +188,32 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 		} else {
 			llvm::errs() << std::format("{}: rethrow outside catch statement may terminate\n", throwExpr->getBeginLoc().printToString(*sourceManager));
 		}
+		return true;
+	}
+
+	bool TraverseCallExpr(clang::CallExpr* callExpr) {
+		if (clang::FunctionDecl* calledFuncDecl = callExpr->getDirectCallee()) {
+			TraverseFunctionDecl(calledFuncDecl);
+			thrownTypes[scopeStack.back()].insert_range(thrownTypes[calledFuncDecl]);
+		}
+		RecursiveASTVisitor::TraverseCallExpr(callExpr);
+		return true;
+	}
+
+	bool TraverseCXXOperatorCallExpr(clang::CXXOperatorCallExpr* operatorCallExpr) {
+		TraverseCallExpr(operatorCallExpr);
+		return true;
+	}
+
+	bool TraverseCXXConstructExpr(clang::CXXConstructExpr* constructExpr) {
+		TraverseFunctionDecl(constructExpr->getConstructor());
+		thrownTypes[scopeStack.back()].insert_range(thrownTypes[constructExpr->getConstructor()]);
+		RecursiveASTVisitor::TraverseCXXConstructExpr(constructExpr);
+		return true;
+	}
+
+	bool TraverseCXXTemporaryObjectExpr(clang::CXXTemporaryObjectExpr* tempObjExpr) {
+		TraverseCXXConstructExpr(tempObjExpr);
 		return true;
 	}
 };
