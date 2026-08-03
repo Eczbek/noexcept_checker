@@ -50,7 +50,7 @@ struct Visitor : clang::RecursiveASTVisitor<Visitor> {
 			scopeStack.push_back(funcDecl);
 			RecursiveASTVisitor::TraverseFunctionDecl(funcDecl);
 			scopeStack.pop_back();
-			if (scopeStack.size() > 1) {
+			if (scopeStack.size()) {
 				thrownTypes[scopeStack.back()].insert_range(thrownTypes[funcDecl]);
 			}
 

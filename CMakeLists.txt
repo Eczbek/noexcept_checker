@@ -26,6 +26,8 @@ target_compile_options(noexcept_checker PRIVATE
 	-Wpedantic
 	-Wconversion
 	-Wsign-conversion
+	-fsanitize=address
+	-static-libasan
 )
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

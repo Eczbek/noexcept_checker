@@ -45,7 +45,7 @@ for file, expected_lines in [
 	["test/warn_throw_unscoped.cpp", [
 		"test/warn_throw_unscoped.cpp:1:10: throw in namespace scope"]]
 ]:
-	lines = set(filter(lambda s: len(s) > 0, os.popen("clang++ -c -fplugin=build/noexcept_checker.so -Xclang -plugin -Xclang noexcept_checker -std=c++23 -w -o/dev/null " + file + " 2>&1").read().split("\n")))
+	lines = set(filter(lambda s: len(s) > 0, os.popen("clang++ -o/dev/null -c -std=c++23 -w -fsanitize=address -fplugin=build/noexcept_checker.so -Xclang -plugin -Xclang noexcept_checker " + file + " 2>&1").read().split("\n")))
 	if lines != set(expected_lines):
 		print("\n".join(lines) + "\n")
 		passed = False
